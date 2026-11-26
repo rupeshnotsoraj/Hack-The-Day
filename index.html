@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DoseMind AI — Smart Medicine Reminder</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Auth Gate View (shown when not signed in) -->
+  <section id="authView" class="auth-shell">
+    <div class="auth-card">
+      <div class="brand auth-brand">
+        <div class="brand-icon" aria-hidden="true">💊</div>
+        <div>
+          <h1>DoseMind AI</h1>
+          <p class="subtitle">Personal Medication &amp; Long-Term Recovery Archive</p>
+        </div>
+      </div>
+
+      <p class="auth-lead">
+        Create an account to save your schedules, cured treatment courses, doctor contacts, and full medication history—accessible anytime in the future for you or anyone in need.
+      </p>
+
+      <div class="auth-tabs" role="tablist">
+        <button type="button" class="auth-tab active" id="showLoginTab">Sign In</button>
+        <button type="button" class="auth-tab" id="showRegisterTab">Create Account</button>
+      </div>
+
+      <form id="loginForm" class="stack-sm">
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="loginEmail" placeholder="you@example.com" required autocomplete="email" />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password" />
+        </label>
+        <button type="submit" class="btn btn-primary full-width" id="loginSubmitBtn">Sign In</button>
+      </form>
+
+      <form id="registerForm" class="stack-sm hidden">
+        <label class="field">
+          <span>Full Name</span>
+          <input type="text" id="regName" placeholder="e.g. Alex Rivera" required autocomplete="name" />
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="regEmail" placeholder="you@example.com" required autocomplete="email" />
+        </label>
+        <label class="field">
+          <span>Password (min 6 characters)</span>
+          <input type="password" id="regPassword" minlength="6" placeholder="Create a password" required autocomplete="new-password" />
+        </label>
+        <label class="checkbox-row hidden" id="importLegacyWrap">
+          <input type="checkbox" id="importLegacyInput" checked />
+          <span>Import existing local medications &amp; history into this account</span>
+        </label>
+        <button type="submit" class="btn btn-primary full-width" id="registerSubmitBtn">Create Account</button>
+      </form>
+
+      <p id="authError" class="hint error hidden"></p>
+    </div>
+  </section>
+
+  <!-- Authenticated App View -->
+  <div id="appView" class="hidden">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">💊</div>
+          <div>
+            <h1>DoseMind AI</h1>
+            <p class="subtitle">Smart Medicine Reminder &amp; Recovery Archive</p>
+          </div>
+        </div>
+
+        <nav class="nav-switch" aria-label="Main sections">
+          <button type="button" class="nav-pill active" id="navDashboardBtn">🏠 Dashboard</button>
+          <button type="button" class="nav-pill" id="navProfileBtn">👤 Patient Profile</button>
+        </nav>
+
+        <div class="topbar-actions">
+          <div class="clock-pill" id="liveClock" title="Current local time">--:--:--</div>
+          <button class="btn btn-ghost btn-sm" id="largeTextBtn" type="button" title="Toggle large accessible text">
+            Aa
+          </button>
+          <button class="btn btn-ghost btn-sm" id="darkModeBtn" type="button" title="Toggle dark mode">
+            🌙
+          </button>
+          <button class="btn btn-ghost btn-sm" id="exportReportBtn" type="button" title="Download full medical history CSV report">
+            📄 Report
+          </button>
+          <button class="btn btn-ghost btn-sm" id="testAlarmBtn" type="button" title="Test sound &amp; notification">
+            🔔 Test
+          </button>
+          <button class="btn btn-outline btn-sm" id="apiKeyStatusBtn" type="button">
+            <span class="status-dot" id="apiKeyDot"></span>
+            <span id="apiKeyBtnLabel">Gemini API Key</span>
+          </button>
+          <button type="button" class="user-pill user-pill-btn" id="userBadge" title="Open Patient Profile">👤 Account</button>
+          <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">Sign Out</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Active Due Dose Alert Banner -->
+    <section class="alert-banner hidden" id="dueAlertBanner" role="alert">
+      <div class="container alert-banner-inner">
+        <div class="alert-info">
+          <span class="alert-pulse" aria-hidden="true">⏰</span>
+          <div>
+            <strong id="dueAlertTitle">Time for your medication</strong>
+            <p id="dueAlertSubtitle"></p>
+          </div>
+        </div>
+        <div class="alert-actions">
+          <button class="btn btn-success" id="alertTakeBtn" type="button">✓ Mark Taken</button>
+          <button class="btn btn-warning" id="alertSnoozeBtn" type="button">💤 Snooze</button>
+          <button class="btn btn-ghost" id="alertSkipBtn" type="button">Skip</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD PAGE -->
+    <main class="container main-content" id="dashboardPage">
+      <!-- Summary Metrics -->
+      <section class="stats-grid" aria-label="Daily overview">
+        <article class="stat-card">
+          <span class="stat-label">Today's Progress</span>
+          <div class="stat-value-row">
+            <strong class="stat-value" id="todayProgressValue">0 / 0</strong>
+            <span class="stat-badge" id="todayProgressPct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="todayProgressBar" style="width: 0%"></div>
+          </div>
+        </article>
+
+        <article class="stat-card">
+          <span class="stat-label">Next Scheduled Dose</span>
+          <strong class="stat-value stat-value-sm" id="nextDoseName">No upcoming doses</strong>
+          <p class="stat-meta" id="nextDoseCountdown">Add a medicine or load demo data</p>
+        </article>
+
+        <article class="stat-card">
+          <span class="stat-label">7-Day Adherence</span>
+          <div class="stat-value-row">
+            <strong class="stat-value" id="adherenceValue">--%</strong>
+            <span class="stat-badge neutral" id="takenTotalCount">0 taken</span>
+          </div>
+          <p class="stat-meta" id="caregiverSummaryMeta">Logged doses over the past 7 days</p>
+        </article>
+
+        <article class="stat-card">
+          <span class="stat-label">Refill &amp; Archive</span>
+          <strong class="stat-value stat-value-sm" id="refillStatusValue">All stocked</strong>
+          <p class="stat-meta" id="refillStatusMeta">0 cured courses archived</p>
+        </article>
+      </section>
+
+      <div class="workspace-grid">
+        <!-- Left Column: Today's Timeline, Medicine Cabinet, Cured Archive & History -->
+        <div class="column-primary">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Today's Schedule</h2>
+                <p class="panel-desc" id="todayDateLabel"></p>
+              </div>
+              <div class="panel-actions">
+                <button class="btn btn-ghost btn-sm" id="loadSampleBtn" type="button">Load Demo</button>
+                <button class="btn btn-primary btn-sm" id="openAddMedBtn" type="button">+ Add Medicine</button>
+              </div>
+            </div>
+
+            <div id="timelineContainer" class="timeline-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Active &amp; Paused Medicines</h2>
+                <p class="panel-desc">Manage schedules, PRN doses, refills, or mark a course as cured</p>
+              </div>
+              <div class="panel-actions">
+                <button class="btn btn-outline btn-sm" id="checkInteractionsBtn" type="button">
+                  🛡️ Check Interactions
+                </button>
+                <span class="count-pill" id="cabinetCount">0 active</span>
+              </div>
+            </div>
+
+            <div id="cabinetContainer" class="cabinet-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Cured &amp; Completed Archive</h2>
+                <p class="panel-desc">Preserved permanently in your account for future doctors or anyone in need</p>
+              </div>
+              <span class="count-pill" id="archiveCount">0 cured</span>
+            </div>
+            <div class="search-row">
+              <input type="text" id="archiveSearchInput" placeholder="Search past medicines or conditions..." />
+            </div>
+            <div id="archiveContainer" class="cabinet-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Full Dose History Log</h2>
+                <p class="panel-desc">Lifetime record of taken, snoozed, and skipped doses</p>
+              </div>
+              <span class="count-pill" id="historyCount">0 logs</span>
+            </div>
+            <div class="search-row">
+              <input type="text" id="historySearchInput" placeholder="Filter dose logs by medicine, condition, or date..." />
+            </div>
+            <div id="historyContainer" class="history-list"></div>
+          </section>
+        </div>
+
+        <!-- Right Column: Gemini AI Features -->
+        <aside class="column-ai">
+          <section class="panel ai-panel">
+            <div class="panel-header">
+              <div>
+                <h2>✨ Gemini Smart Parser</h2>
+                <p class="panel-desc">Paste instructions or upload a pill bottle / prescription photo</p>
+              </div>
+            </div>
+
+            <form id="geminiParseForm" class="stack-sm">
+              <textarea
+                id="parseInputText"
+                rows="3"
+                placeholder='e.g. "Amoxicillin 500mg twice daily after meals for 7 days for throat infection"'
+              ></textarea>
+
+              <div class="upload-row">
+                <label class="file-btn" for="parseImageInput">
+                  📷 Attach Label / Rx Image
+                  <input type="file" id="parseImageInput" accept="image/*" hidden />
+                </label>
+                <span class="file-name" id="parseImageName">No image attached</span>
+                <button type="button" class="btn-link hidden" id="clearImageBtn">Remove</button>
+              </div>
+
+              <div id="imagePreviewWrap" class="image-preview hidden">
+                <img id="parseImagePreview" alt="Attached prescription preview" />
+              </div>
+
+              <button class="btn btn-primary full-width" id="parseSubmitBtn" type="submit">
+                Extract Schedule with Gemini
+              </button>
+            </form>
+
+            <div id="parsedResultsWrap" class="parsed-results hidden">
+              <div class="parsed-header">
+                <strong id="parsedSummary">Extracted Medicines</strong>
+                <button class="btn btn-success btn-sm" id="addAllParsedBtn" type="button">
+                  + Add All to Schedule
+                </button>
+              </div>
+              <div id="parsedList" class="stack-xs"></div>
+            </div>
+          </section>
+
+          <section class="panel ai-panel">
+            <div class="panel-header">
+              <div>
+                <h2>🩺 Gemini Medication Q&amp;A</h2>
+                <p class="panel-desc">Uses patient allergies, active meds &amp; cured history as context</p>
+              </div>
+            </div>
+
+            <div class="quick-chips">
+              <button type="button" class="chip" data-question="Check my active schedule for any timing conflicts or food-spacing tips.">
+                Check timing conflicts
+              </button>
+              <button type="button" class="chip" data-question="What general steps should I follow if I miss a scheduled dose?">
+                Missed dose tips
+              </button>
+              <button type="button" class="chip" data-question="Summarize my current and past cured medications for a doctor visit.">
+                Doctor visit summary
+              </button>
+            </div>
+
+            <div id="chatMessages" class="chat-box">
+              <div class="chat-msg assistant">
+                Ask any question about your current schedule, allergies, or past cured medications. Your account's medical profile and history are included as context.
+              </div>
+            </div>
+
+            <form id="geminiChatForm" class="chat-form">
+              <input
+                type="text"
+                id="chatInput"
+                placeholder="Ask Gemini about your medications..."
+                required
+              />
+              <button class="btn btn-primary" id="chatSubmitBtn" type="submit">Ask</button>
+            </form>
+
+            <p class="disclaimer">
+              AI responses are informational only and not a substitute for professional medical advice. Always consult a doctor or pharmacist.
+            </p>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <!-- PATIENT PROFILE PAGE -->
+    <main class="container main-content hidden" id="profilePage">
+      <section class="panel profile-hero">
+        <div class="profile-hero-top">
+          <div class="profile-avatar" aria-hidden="true">🩺</div>
+          <div>
+            <h2 id="profileOverviewName">Patient Overview</h2>
+            <p class="panel-desc" id="profileOverviewMeta"></p>
+          </div>
+        </div>
+
+        <div class="profile-summary-grid" id="profileSummaryGrid"></div>
+      </section>
+
+      <div class="workspace-grid">
+        <!-- Patient Medical Profile Form -->
+        <div class="column-primary">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Patient Health Overview</h2>
+                <p class="panel-desc">Allergies, blood type, chronic conditions &amp; emergency contact</p>
+              </div>
+            </div>
+
+            <form id="profileForm" class="stack-sm">
+              <div class="form-grid">
+                <label class="field">
+                  <span>Patient Full Name *</span>
+                  <input type="text" id="profName" required />
+                </label>
+
+                <label class="field">
+                  <span>Date of Birth</span>
+                  <input type="date" id="profDob" />
+                </label>
+
+                <label class="field">
+                  <span>Blood Type</span>
+                  <select id="profBloodType">
+                    <option value="">Not specified</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Known Allergies</span>
+                  <input type="text" id="profAllergies" placeholder="e.g. Penicillin, Sulfa drugs, Peanuts" />
+                </label>
+              </div>
+
+              <label class="field">
+                <span>Ongoing Conditions / Medical Notes</span>
+                <textarea id="profConditions" rows="2" placeholder="e.g. Type 2 Diabetes, Mild Asthma"></textarea>
+              </label>
+
+              <div class="form-grid">
+                <label class="field">
+                  <span>Emergency Contact Name</span>
+                  <input type="text" id="profEmergencyName" placeholder="e.g. Jamie Rivera" />
+                </label>
+
+                <label class="field">
+                  <span>Relationship</span>
+                  <input type="text" id="profEmergencyRelation" placeholder="e.g. Spouse, Parent, Sibling" />
+                </label>
+              </div>
+
+              <div class="field">
+                <span>Emergency Contact Phone (Quick Dial)</span>
+                <div class="phone-action-row">
+                  <input type="tel" id="profEmergencyPhone" placeholder="e.g. +1-555-0199" />
+                  <a id="emergencyQuickDialBtn" class="btn btn-success btn-sm hidden" href="#">📞 Call Now</a>
+                </div>
+              </div>
+
+              <div class="modal-footer">
+                <button type="submit" class="btn btn-primary" id="saveProfileBtn">Save Patient Profile</button>
+              </div>
+            </form>
+          </section>
+
+          <!-- Danger Zone: Delete Account -->
+          <section class="panel danger-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Account Management &amp; Deletion</h2>
+                <p class="panel-desc">Permanently delete your account, active schedules, doctors list, and medical history</p>
+              </div>
+            </div>
+            <p class="hint">
+              Deleting your account cannot be undone. Consider downloading your <strong>📄 Report</strong> first if you want a backup copy.
+            </p>
+            <div class="danger-actions">
+              <button type="button" class="btn btn-danger" id="openDeleteAccountBtn">
+                Delete My Account
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <!-- Doctors & Physicians Directory with Quick Dial -->
+        <aside class="column-ai">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Doctors &amp; Physicians</h2>
+                <p class="panel-desc">Store clinic contacts and call directly with Quick Dial</p>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" id="openAddDoctorBtn">+ Add Doctor</button>
+            </div>
+
+            <div id="doctorsListContainer" class="stack-sm"></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add / Edit Medicine Modal -->
+  <dialog id="medicineModal" class="modal">
+    <form id="medicineForm" class="modal-card">
+      <div class="modal-header">
+        <h3 id="medicineModalTitle">Add Medicine</h3>
+        <button type="button" class="icon-close" data-close-modal="medicineModal" aria-label="Close">✕</button>
+      </div>
+
+      <input type="hidden" id="medId" />
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Medicine Name *</span>
+          <input type="text" id="medName" placeholder="e.g. Metformin" required />
+        </label>
+
+        <label class="field">
+          <span>Dosage</span>
+          <input type="text" id="medDosage" placeholder="e.g. 500 mg (1 tablet)" />
+        </label>
+
+        <label class="field">
+          <span>Condition / Purpose</span>
+          <input type="text" id="medCondition" placeholder="e.g. Throat infection, Fever" />
+        </label>
+
+        <label class="field">
+          <span>Schedule Frequency</span>
+          <select id="medScheduleType">
+            <option value="daily">Every Day</option>
+            <option value="days">Specific Days of Week</option>
+            <option value="prn">As Needed (PRN)</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Meal Instruction</span>
+          <select id="medMeal">
+            <option value="Any time">Any time</option>
+            <option value="Before meal">Before meal</option>
+            <option value="With food">With food</option>
+            <option value="After meal">After meal</option>
+            <option value="Empty stomach">Empty stomach</option>
+            <option value="Bedtime">Bedtime</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Tag Color</span>
+          <select id="medColor">
+            <option value="#0ea5e9">Sky Blue</option>
+            <option value="#10b981">Emerald</option>
+            <option value="#f59e0b">Amber</option>
+            <option value="#8b5cf6">Violet</option>
+            <option value="#ec4899">Rose</option>
+            <option value="#06b6d4">Cyan</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Start Date (optional)</span>
+          <input type="date" id="medStartDate" />
+        </label>
+
+        <label class="field">
+          <span>End Date (optional)</span>
+          <input type="date" id="medEndDate" />
+        </label>
+
+        <label class="field">
+          <span>Current Stock (pills left)</span>
+          <input type="number" id="medStock" min="0" placeholder="Optional, e.g. 30" />
+        </label>
+
+        <label class="field">
+          <span>Low-Stock Alert At</span>
+          <input type="number" id="medThreshold" min="0" value="5" />
+        </label>
+      </div>
+
+      <div class="field hidden" id="daysOfWeekField">
+        <span>Active Days</span>
+        <div class="days-row" id="daysOfWeekGroup">
+          <label class="day-pill"><input type="checkbox" value="0" checked />Sun</label>
+          <label class="day-pill"><input type="checkbox" value="1" checked />Mon</label>
+          <label class="day-pill"><input type="checkbox" value="2" checked />Tue</label>
+          <label class="day-pill"><input type="checkbox" value="3" checked />Wed</label>
+          <label class="day-pill"><input type="checkbox" value="4" checked />Thu</label>
+          <label class="day-pill"><input type="checkbox" value="5" checked />Fri</label>
+          <label class="day-pill"><input type="checkbox" value="6" checked />Sat</label>
+        </div>
+      </div>
+
+      <div class="field" id="reminderTimesField">
+        <span>Reminder Times *</span>
+        <div class="time-adder">
+          <input type="time" id="newTimeInput" value="08:00" />
+          <button type="button" class="btn btn-outline btn-sm" id="addTimeBtn">+ Add Time</button>
+        </div>
+        <div id="timesChipList" class="times-chips"></div>
+      </div>
+
+      <label class="field">
+        <span>Notes</span>
+        <textarea id="medNotes" rows="2" placeholder="Optional instructions or duration"></textarea>
+      </label>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-close-modal="medicineModal">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="saveMedBtn">Save Medicine</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Add / Edit Doctor Modal -->
+  <dialog id="doctorModal" class="modal">
+    <form id="doctorForm" class="modal-card">
+      <div class="modal-header">
+        <h3 id="doctorModalTitle">Add Doctor / Physician</h3>
+        <button type="button" class="icon-close" data-close-modal="doctorModal" aria-label="Close">✕</button>
+      </div>
+
+      <input type="hidden" id="docId" />
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Doctor Name *</span>
+          <input type="text" id="docName" placeholder="e.g. Dr. Maya Patel" required />
+        </label>
+
+        <label class="field">
+          <span>Specialty</span>
+          <input type="text" id="docSpecialty" placeholder="e.g. Cardiologist, GP" />
+        </label>
+
+        <label class="field">
+          <span>Phone Number *</span>
+          <input type="tel" id="docPhone" placeholder="e.g. +1-555-0148" required />
+        </label>
+
+        <label class="field">
+          <span>Clinic / Hospital</span>
+          <input type="text" id="docClinic" placeholder="e.g. City Wellness Clinic" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Email (optional)</span>
+        <input type="email" id="docEmail" placeholder="doctor@clinic.com" />
+      </label>
+
+      <label class="field">
+        <span>Notes / Visiting Hours</span>
+        <textarea id="docNotes" rows="2" placeholder="e.g. Mon-Fri 9am-5pm"></textarea>
+      </label>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="docPrimary" />
+        <span>Set as Primary Physician</span>
+      </label>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-close-modal="doctorModal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Doctor</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Delete Account Confirmation Modal -->
+  <dialog id="deleteAccountModal" class="modal">
+    <form id="deleteAccountForm" class="modal-card">
+      <div class="modal-header">
+        <h3>Delete Account Permanently</h3>
+        <button type="button" class="icon-close" data-close-modal="deleteAccountModal" aria-label="Close">✕</button>
+      </div>
+
+      <p class="hint error">
+        This will permanently erase your account, all medications, cured archives, dose logs, profile info, and doctor contacts.
+      </p>
+
+      <label class="field">
+        <span>Confirm with your password *</span>
+        <input type="password" id="deleteConfirmPassword" placeholder="Enter your account password" required />
+      </label>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-close-modal="deleteAccountModal">Cancel</button>
+        <button type="submit" class="btn btn-danger" id="confirmDeleteAccountBtn">Permanently Delete Account</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings & Gemini API Key Modal -->
+  <dialog id="settingsModal" class="modal">
+    <form id="settingsForm" class="modal-card">
+      <div class="modal-header">
+        <h3>Settings, Gemini API &amp; Caregiver</h3>
+        <button type="button" class="icon-close" data-close-modal="settingsModal" aria-label="Close">✕</button>
+      </div>
+
+      <div class="stack-sm">
+        <div class="info-box" id="serverKeyNotice"></div>
+
+        <label class="field">
+          <span>Gemini API Key (sent via <code>x-goog-api-key</code> header)</span>
+          <div class="password-row">
+            <input
+              type="password"
+              id="geminiApiKeyInput"
+              placeholder="AQ... or restricted AIza..."
+              autocomplete="off"
+            />
+            <button type="button" class="btn btn-outline btn-sm" id="toggleKeyVisibility">Show</button>
+            <button type="button" class="btn btn-primary btn-sm" id="verifyKeyBtn">Verify Key</button>
+          </div>
+          <small class="hint" id="verifyKeyResult">
+            Google AI Studio uses <code>AQ...</code> Authorization Keys or <code>AIza...</code> keys restricted to the Generative Language API.
+          </small>
+        </label>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Gemini Model</span>
+            <select id="geminiModelSelect">
+              <option value="gemini-3.8-flash">gemini-3.8-flash (Fast &amp; Multimodal)</option>
+              <option value="gemini-4-hydrogen">gemini-4-hydrogen (Frontier General)</option>
+              <option value="gemini-4-argon">gemini-4-argon (Fast Reasoning)</option>
+              <option value="gemini-3.7-flash">gemini-3.7-flash</option>
+              <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+              <option value="custom">Custom Model ID...</option>
+            </select>
+          </label>
+
+          <label class="field" id="customModelWrap">
+            <span>Custom Model ID (optional)</span>
+            <input type="text" id="customModelInput" placeholder="e.g. gemini-4-neon" />
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Caregiver / Doctor Name</span>
+            <input type="text" id="caregiverNameInput" placeholder="Optional, e.g. Dr. Patel" />
+          </label>
+
+          <label class="field">
+            <span>Caregiver Contact (Phone/Email)</span>
+            <input type="text" id="caregiverContactInput" placeholder="Optional contact info" />
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Default Snooze (minutes)</span>
+            <input type="number" id="snoozeMinutesInput" min="1" max="120" value="10" />
+          </label>
+
+          <div class="field">
+            <span>Browser Notifications</span>
+            <button type="button" class="btn btn-outline full-width" id="requestNotifBtn">
+              Enable Desktop Alerts
+            </button>
+            <small class="hint" id="notifPermStatus">Status: checking...</small>
+          </div>
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="soundEnabledInput" checked />
+          <span>Play gentle audio chime when a dose is due</span>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="notificationsEnabledInput" checked />
+          <span>Send browser desktop notification when a dose is due</span>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-close-modal="settingsModal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
