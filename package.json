@@ -1,0 +1,13 @@
+{
+  "name": "smart-medicine-reminder",
+  "version": "1.0.0",
+  "description": "Smart Medicine Reminder web application powered by Node.js and the Google Gemini API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
